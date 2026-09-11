@@ -656,70 +656,94 @@ def create_app():
         }), 201
         
         
-    @app.post("/api/load-plugin")
-    @require_auth
-    def load_plugin():
-        """
-        Load a serialized Python class implementing WatermarkingMethod from
-        STORAGE_DIR/files/plugins/<filename>.{pkl|dill} and register it in wm_mod.METHODS.
-        Body: { "filename": "MyMethod.pkl", "overwrite": false }
-        """
-        payload = request.get_json(silent=True) or {}
-        filename = (payload.get("filename") or "").strip()
-        overwrite = bool(payload.get("overwrite", False))
-
-        if not filename:
-            return jsonify({"error": "filename is required"}), 400
-
-        # Locate the plugin in /storage/files/plugins (relative to STORAGE_DIR)
-        storage_root = Path(app.config["STORAGE_DIR"])
-        plugins_dir = storage_root / "files" / "plugins"
-        try:
-            plugins_dir.mkdir(parents=True, exist_ok=True)
-            plugin_path = plugins_dir / filename
-        except Exception as e:
-            return jsonify({"error": f"plugin path error: {e}"}), 500
-
-        if not plugin_path.exists():
-            return jsonify({"error": f"plugin file not found: {safe}"}), 404
-
-        # Unpickle the object (dill if available; else std pickle)
-        try:
-            with plugin_path.open("rb") as f:
-                obj = _pickle.load(f)
-        except Exception as e:
-            return jsonify({"error": f"failed to deserialize plugin: {e}"}), 400
-
-        # Accept: class object, or instance (we'll promote instance to its class)
-        if isinstance(obj, type):
-            cls = obj
-        else:
-            cls = obj.__class__
-
-        # Determine method name for registry
-        method_name = getattr(cls, "name", getattr(cls, "__name__", None))
-        if not method_name or not isinstance(method_name, str):
-            return jsonify({"error": "plugin class must define a readable name (class.__name__ or .name)"}), 400
-
-        # Validate interface: either subclass of WatermarkingMethod or duck-typing
-        has_api = all(hasattr(cls, attr) for attr in ("add_watermark", "read_secret"))
-        if WatermarkingMethod is not None:
-            is_ok = issubclass(cls, WatermarkingMethod) and has_api
-        else:
-            is_ok = has_api
-        if not is_ok:
-            return jsonify({"error": "plugin does not implement WatermarkingMethod API (add_watermark/read_secret)"}), 400
-            
-        # Register the class (not an instance) so you can instantiate as needed later
-        WMUtils.METHODS[method_name] = cls()
-        
-        return jsonify({
-            "loaded": True,
-            "filename": filename,
-            "registered_as": method_name,
-            "class_qualname": f"{getattr(cls, '__module__', '?')}.{getattr(cls, '__qualname__', cls.__name__)}",
-            "methods_count": len(WMUtils.METHODS)
-        }), 201
+    # DISABLED (kept for reference, not registered with Flask): this endpoint
+    # used to pickle.load() a caller-named file. It was a critical remote-code-
+    # execution vulnerability:
+    #
+    #   1. `plugin_path = plugins_dir / filename` did not confine `filename`
+    #      to `plugins_dir` -- passing an absolute path (e.g.
+    #      "/app/storage/files/<user>/<ts>__evil.pkl") makes Python's Path "/"
+    #      operator discard the `plugins_dir` prefix entirely, unlike the
+    #      containment check other routes in this file use
+    #      (`.resolve().relative_to(STORAGE_DIR)`).
+    #   2. `upload-document` never validates that uploads are PDFs, so any
+    #      authenticated (self-registered, i.e. untrusted) user could plant
+    #      an arbitrary pickle payload under their own storage directory.
+    #   3. `pickle.load()` executes attacker-controlled code via `__reduce__`
+    #      during deserialization, before any interface check on the
+    #      resulting object ever runs.
+    #
+    # Net effect: any newly self-registered account could achieve RCE in this
+    # container. Loading arbitrary code via pickle/dill has no safe fix short
+    # of removing it: there is no way to validate a pickle stream's safety
+    # before deserializing it. Do not re-enable without a full redesign
+    # (e.g. verified/signed plugin sources loaded as plain Python modules,
+    # no pickle/dill on any user-reachable path).
+    #
+    # @app.post("/api/load-plugin")
+    # @require_auth
+    # def load_plugin():
+    #     """
+    #     Load a serialized Python class implementing WatermarkingMethod from
+    #     STORAGE_DIR/files/plugins/<filename>.{pkl|dill} and register it in wm_mod.METHODS.
+    #     Body: { "filename": "MyMethod.pkl", "overwrite": false }
+    #     """
+    #     payload = request.get_json(silent=True) or {}
+    #     filename = (payload.get("filename") or "").strip()
+    #     overwrite = bool(payload.get("overwrite", False))
+    #
+    #     if not filename:
+    #         return jsonify({"error": "filename is required"}), 400
+    #
+    #     # Locate the plugin in /storage/files/plugins (relative to STORAGE_DIR)
+    #     storage_root = Path(app.config["STORAGE_DIR"])
+    #     plugins_dir = storage_root / "files" / "plugins"
+    #     try:
+    #         plugins_dir.mkdir(parents=True, exist_ok=True)
+    #         plugin_path = plugins_dir / filename
+    #     except Exception as e:
+    #         return jsonify({"error": f"plugin path error: {e}"}), 500
+    #
+    #     if not plugin_path.exists():
+    #         return jsonify({"error": f"plugin file not found: {safe}"}), 404
+    #
+    #     # Unpickle the object (dill if available; else std pickle)
+    #     try:
+    #         with plugin_path.open("rb") as f:
+    #             obj = _pickle.load(f)
+    #     except Exception as e:
+    #         return jsonify({"error": f"failed to deserialize plugin: {e}"}), 400
+    #
+    #     # Accept: class object, or instance (we'll promote instance to its class)
+    #     if isinstance(obj, type):
+    #         cls = obj
+    #     else:
+    #         cls = obj.__class__
+    #
+    #     # Determine method name for registry
+    #     method_name = getattr(cls, "name", getattr(cls, "__name__", None))
+    #     if not method_name or not isinstance(method_name, str):
+    #         return jsonify({"error": "plugin class must define a readable name (class.__name__ or .name)"}), 400
+    #
+    #     # Validate interface: either subclass of WatermarkingMethod or duck-typing
+    #     has_api = all(hasattr(cls, attr) for attr in ("add_watermark", "read_secret"))
+    #     if WatermarkingMethod is not None:
+    #         is_ok = issubclass(cls, WatermarkingMethod) and has_api
+    #     else:
+    #         is_ok = has_api
+    #     if not is_ok:
+    #         return jsonify({"error": "plugin does not implement WatermarkingMethod API (add_watermark/read_secret)"}), 400
+    #
+    #     # Register the class (not an instance) so you can instantiate as needed later
+    #     WMUtils.METHODS[method_name] = cls()
+    #
+    #     return jsonify({
+    #         "loaded": True,
+    #         "filename": filename,
+    #         "registered_as": method_name,
+    #         "class_qualname": f"{getattr(cls, '__module__', '?')}.{getattr(cls, '__qualname__', cls.__name__)}",
+    #         "methods_count": len(WMUtils.METHODS)
+    #     }), 201
         
     
     

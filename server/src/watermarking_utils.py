@@ -42,15 +42,19 @@ from watermarking_method import (
     load_pdf_bytes,
 )
 from add_after_eof import AddAfterEOF
-from unsafe_bash_bridge_append_eof import UnsafeBashBridgeAppendEOF
 
 # --------------------
 # Method registry
 # --------------------
 
+# NOTE: UnsafeBashBridgeAppendEOF is intentionally NOT registered here.
+# It builds a shell command by concatenating the caller-supplied `secret`
+# and runs it with `subprocess.run(cmd, shell=True, ...)`, which is a
+# direct shell command injection reachable through the authenticated
+# create-watermark/read-watermark API. Do not re-enable without replacing
+# the implementation (no shell=True, no string-built commands).
 METHODS: Dict[str, WatermarkingMethod] = {
     AddAfterEOF.name: AddAfterEOF(),
-    UnsafeBashBridgeAppendEOF.name: UnsafeBashBridgeAppendEOF()
 }
 """Registry of available watermarking methods.
 
