@@ -8,7 +8,7 @@ dependencies = [
 	"Flask==3.0.3",
 	"gunicorn==21.2.0",
 	"PyMySQL==1.1.2",
-	"SQLAlchemy==2.0.43",
+	"SQLAlchemy==2.0.52",
 	"dill==0.4.0"
 ]
 
