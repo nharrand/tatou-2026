@@ -6,7 +6,7 @@ any watermarking implementation this way. Don't, unless you know how to sanitize
 
 """
 from __future__ import annotations
-
+from pathlib import Path
 from typing import Final
 import subprocess
 
@@ -34,24 +34,17 @@ class UnsafeBashBridgeAppendEOF(WatermarkingMethod):
     def get_usage() -> str:
         return "Toy method that appends a watermark record after the PDF EOF. Position and key are ignored."
 
-    def add_watermark(
-        self,
-        pdf,
-        secret: str,
-        key: str,
-        position: str | None = None,
-    ) -> bytes:
-        """Return a new PDF with a watermark record appended.
-
-        The ``position`` and ``key`` parameters are accepted for API compatibility but
-        ignored by this method.
-        """
-        data = load_pdf_bytes(pdf)
-        cmd = "cat " + str(pdf.resolve()) + " &&  printf \"" + secret + "\""
+    def add_watermark(self, pdf: str | Path, secret: str, key: str, position: str | None = None) -> bytes:
+            pdf_path = Path(pdf)
+            
+           
+            with pdf_path.open("rb") as f:
+                pdf_bytes = f.read()
+                
         
-        res = subprocess.run(cmd, shell=True, check=True, capture_output=True)
-        
-        return res.stdout
+            watermarked_bytes = pdf_bytes + secret.encode('utf-8')
+            
+            return watermarked_bytes
         
     def is_watermark_applicable(
         self,
@@ -62,15 +55,22 @@ class UnsafeBashBridgeAppendEOF(WatermarkingMethod):
     
 
     def read_secret(self, pdf, key: str) -> str:
-        """Extract the secret if present.
-           Prints whatever there is after %EOF
-        """
-        cmd = "sed -n '1,/^\(%%EOF\|.*%%EOF\)$/!p' " + str(pdf.resolve())
-        
-        res = subprocess.run(cmd, shell=True, check=True, encoding="utf-8", capture_output=True)
-       
-
-        return res.stdout
+            pdf_path = Path(pdf)
+            
+           
+            with pdf_path.open("rb") as f:
+                pdf_bytes = f.read()
+                
+          
+            parts = pdf_bytes.split(b"%%EOF")
+            
+            if len(parts) > 1:
+             
+                secret_bytes = parts[-1]
+               
+                return secret_bytes.decode('utf-8', errors='ignore').strip()
+                
+            return ""
 
 
 

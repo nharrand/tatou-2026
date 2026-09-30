@@ -36,6 +36,9 @@ import json
 import os
 import re
 
+
+from invisible_text import InvisibleText
+
 from watermarking_method import (
     PdfSource,
     WatermarkingMethod,
@@ -50,8 +53,10 @@ from unsafe_bash_bridge_append_eof import UnsafeBashBridgeAppendEOF
 
 METHODS: Dict[str, WatermarkingMethod] = {
     AddAfterEOF.name: AddAfterEOF(),
-    UnsafeBashBridgeAppendEOF.name: UnsafeBashBridgeAppendEOF()
+    UnsafeBashBridgeAppendEOF.name: UnsafeBashBridgeAppendEOF(),
+    InvisibleText.name: InvisibleText(),
 }
+
 """Registry of available watermarking methods.
 
 Keys are human-readable method names (stable, lowercase, hyphenated)

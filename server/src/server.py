@@ -169,6 +169,11 @@ def create_app():
         if not file or file.filename == "":
             return jsonify({"error": "empty filename"}), 400
 
+        if not file.filename.lower().endswith(".pdf"):
+            return jsonify({"error": "only PDF files are allowed"}), 400
+        if file.mimetype != "application/pdf":
+            return jsonify({"error": "invalid file type"}), 400
+
         fname = file.filename
 
         user_dir = app.config["STORAGE_DIR"] / "files" / g.user["login"]
@@ -442,8 +447,9 @@ def create_app():
         return fp
 
     # DELETE /api/delete-document  (and variants)
-    @app.route("/api/delete-document", methods=["DELETE", "POST"])  # POST supported for convenience
+    @app.route("/api/delete-document", methods=["DELETE", "POST"])
     @app.route("/api/delete-document/<document_id>", methods=["DELETE"])
+    @require_auth
     def delete_document(document_id: int | None = None):
         # accept id from path, query (?id= / ?documentid=), or JSON body on POST
         if not document_id:
@@ -460,8 +466,9 @@ def create_app():
         # Fetch the document (enforce ownership)
         try:
             with get_engine().connect() as conn:
-                query = "SELECT * FROM Documents WHERE id = " + doc_id
-                row = conn.execute(text(query)).first()
+
+                query = text("SELECT * FROM Documents WHERE id = :id")
+                row = conn.execute(query, {"id": int(doc_id)}).first()
         except Exception as e:
             return jsonify({"error": f"database error: {str(e)}"}), 503
 
@@ -496,7 +503,7 @@ def create_app():
                 # If your schema does NOT have ON DELETE CASCADE on Version.documentid,
                 # uncomment the next line first:
                 # conn.execute(text("DELETE FROM Version WHERE documentid = :id"), {"id": doc_id})
-                conn.execute(text("DELETE FROM Documents WHERE id = :id"), {"id": doc_id})
+                conn.execute(text("DELETE FROM Documents WHERE id = :id"), {"id": int(doc_id)})
         except Exception as e:
             return jsonify({"error": f"database error during delete: {str(e)}"}), 503
 
@@ -656,70 +663,70 @@ def create_app():
         }), 201
         
         
-    @app.post("/api/load-plugin")
-    @require_auth
-    def load_plugin():
-        """
-        Load a serialized Python class implementing WatermarkingMethod from
-        STORAGE_DIR/files/plugins/<filename>.{pkl|dill} and register it in wm_mod.METHODS.
-        Body: { "filename": "MyMethod.pkl", "overwrite": false }
-        """
-        payload = request.get_json(silent=True) or {}
-        filename = (payload.get("filename") or "").strip()
-        overwrite = bool(payload.get("overwrite", False))
+    # @app.post("/api/load-plugin")
+    # @require_auth
+    # def load_plugin():
+    #     """
+    #     Load a serialized Python class implementing WatermarkingMethod from
+    #     STORAGE_DIR/files/plugins/<filename>.{pkl|dill} and register it in wm_mod.METHODS.
+    #     Body: { "filename": "MyMethod.pkl", "overwrite": false }
+    #     """
+    #     payload = request.get_json(silent=True) or {}
+    #     filename = (payload.get("filename") or "").strip()
+    #     overwrite = bool(payload.get("overwrite", False))
 
-        if not filename:
-            return jsonify({"error": "filename is required"}), 400
+    #     if not filename:
+    #         return jsonify({"error": "filename is required"}), 400
 
-        # Locate the plugin in /storage/files/plugins (relative to STORAGE_DIR)
-        storage_root = Path(app.config["STORAGE_DIR"])
-        plugins_dir = storage_root / "files" / "plugins"
-        try:
-            plugins_dir.mkdir(parents=True, exist_ok=True)
-            plugin_path = plugins_dir / filename
-        except Exception as e:
-            return jsonify({"error": f"plugin path error: {e}"}), 500
+    #     # Locate the plugin in /storage/files/plugins (relative to STORAGE_DIR)
+    #     storage_root = Path(app.config["STORAGE_DIR"])
+    #     plugins_dir = storage_root / "files" / "plugins"
+    #     try:
+    #         plugins_dir.mkdir(parents=True, exist_ok=True)
+    #         plugin_path = plugins_dir / filename
+    #     except Exception as e:
+    #         return jsonify({"error": f"plugin path error: {e}"}), 500
 
-        if not plugin_path.exists():
-            return jsonify({"error": f"plugin file not found: {safe}"}), 404
+    #     if not plugin_path.exists():
+    #         return jsonify({"error": f"plugin file not found: {safe}"}), 404
 
-        # Unpickle the object (dill if available; else std pickle)
-        try:
-            with plugin_path.open("rb") as f:
-                obj = _pickle.load(f)
-        except Exception as e:
-            return jsonify({"error": f"failed to deserialize plugin: {e}"}), 400
+    #     # Unpickle the object (dill if available; else std pickle)
+    #     try:
+    #         with plugin_path.open("rb") as f:
+    #             obj = _pickle.load(f)
+    #     except Exception as e:
+    #         return jsonify({"error": f"failed to deserialize plugin: {e}"}), 400
 
-        # Accept: class object, or instance (we'll promote instance to its class)
-        if isinstance(obj, type):
-            cls = obj
-        else:
-            cls = obj.__class__
+    #     # Accept: class object, or instance (we'll promote instance to its class)
+    #     if isinstance(obj, type):
+    #         cls = obj
+    #     else:
+    #         cls = obj.__class__
 
-        # Determine method name for registry
-        method_name = getattr(cls, "name", getattr(cls, "__name__", None))
-        if not method_name or not isinstance(method_name, str):
-            return jsonify({"error": "plugin class must define a readable name (class.__name__ or .name)"}), 400
+    #     # Determine method name for registry
+    #     method_name = getattr(cls, "name", getattr(cls, "__name__", None))
+    #     if not method_name or not isinstance(method_name, str):
+    #         return jsonify({"error": "plugin class must define a readable name (class.__name__ or .name)"}), 400
 
-        # Validate interface: either subclass of WatermarkingMethod or duck-typing
-        has_api = all(hasattr(cls, attr) for attr in ("add_watermark", "read_secret"))
-        if WatermarkingMethod is not None:
-            is_ok = issubclass(cls, WatermarkingMethod) and has_api
-        else:
-            is_ok = has_api
-        if not is_ok:
-            return jsonify({"error": "plugin does not implement WatermarkingMethod API (add_watermark/read_secret)"}), 400
+    #     # Validate interface: either subclass of WatermarkingMethod or duck-typing
+    #     has_api = all(hasattr(cls, attr) for attr in ("add_watermark", "read_secret"))
+    #     if WatermarkingMethod is not None:
+    #         is_ok = issubclass(cls, WatermarkingMethod) and has_api
+    #     else:
+    #         is_ok = has_api
+    #     if not is_ok:
+    #         return jsonify({"error": "plugin does not implement WatermarkingMethod API (add_watermark/read_secret)"}), 400
             
-        # Register the class (not an instance) so you can instantiate as needed later
-        WMUtils.METHODS[method_name] = cls()
+    #     # Register the class (not an instance) so you can instantiate as needed later
+    #     WMUtils.METHODS[method_name] = cls()
         
-        return jsonify({
-            "loaded": True,
-            "filename": filename,
-            "registered_as": method_name,
-            "class_qualname": f"{getattr(cls, '__module__', '?')}.{getattr(cls, '__qualname__', cls.__name__)}",
-            "methods_count": len(WMUtils.METHODS)
-        }), 201
+    #     return jsonify({
+    #         "loaded": True,
+    #         "filename": filename,
+    #         "registered_as": method_name,
+    #         "class_qualname": f"{getattr(cls, '__module__', '?')}.{getattr(cls, '__qualname__', cls.__name__)}",
+    #         "methods_count": len(WMUtils.METHODS)
+    #     }), 201
         
     
     
