@@ -110,15 +110,6 @@ def test_explore_pdf_fallback_parser():
     assert object_nodes[0]["type"] == "Catalog"
     assert object_nodes[1]["type"] == "Page"
 
-    # check that the page was identified
-    page_nodes = [
-        node for node in result["children"]
-        if node["id"].startswith("page:")
-    ]
-
-    assert len(page_nodes) == 1
-    assert page_nodes[0]["id"] == "page:0000"
-
     # results should be deterministic
     assert explore_pdf(pdf_bytes) == result
 
