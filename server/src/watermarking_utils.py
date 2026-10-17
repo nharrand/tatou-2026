@@ -1,63 +1,35 @@
-"""watermarking_utils.py
+"""Register watermarking methods and inspect PDF objects.
 
-Utility functions and registry for PDF watermarking methods.
-
-This module exposes:
-
-- :data:`METHODS`: a mapping from method name to an instantiated
-  :class:`~watermarking_method.WatermarkingMethod`.
-- :func:`explore_pdf`: build a lightweight JSON-serializable tree of PDF
-  nodes with deterministic identifiers ("name nodes").
-- :func:`apply_watermark`: run a concrete watermarking method on a PDF.
-- :func:`apply_watermark`: run a concrete watermarking method on a PDF.
-- :func:`read_watermark`: recover a secret using a concrete method.
-- :func:`register_method` / :func:`get_method`: registry helpers.
-
-Dependencies
-------------
-Only the standard library is required. If available, the exploration
-routine will use *PyMuPDF* (``fitz``) for a richer object inventory. If
-``fitz`` is not installed, it gracefully falls back to a permissive
-regex-based scan for ``obj ... endobj`` blocks (this may miss compressed
-object streams).
-
-To enable the richer exploration, install PyMuPDF:
-
-    pip install pymupdf
-
+PDF exploration uses PyMuPDF first and a limited regex fallback when native inspection
+fails. The fallback cannot inspect compressed object streams.
 """
 from __future__ import annotations
 
-from typing import Any, Dict, Final, Iterable, List, Mapping
-import base64
 import hashlib
-import io
-import json
-import os
+import logging
 import re
+from typing import Any, Final
 
 from watermarking_method import (
     PdfSource,
     WatermarkingMethod,
     load_pdf_bytes,
 )
-from add_after_eof import AddAfterEOF
-from unsafe_bash_bridge_append_eof import UnsafeBashBridgeAppendEOF
+from watermarking_methods.davide import DavideWatermark
+from watermarking_methods.francesco import FrancescoWatermark
+from watermarking_methods.group13 import Group13Watermark
+from watermarking_methods.khaled import KhaledTextSpacingWatermark
 
-# --------------------
-# Method registry
-# --------------------
+logger = logging.getLogger(__name__)
 
-METHODS: Dict[str, WatermarkingMethod] = {
-    AddAfterEOF.name: AddAfterEOF(),
-    UnsafeBashBridgeAppendEOF.name: UnsafeBashBridgeAppendEOF()
+# Register production methods only. The removable EOF method is reserved for tests.
+METHODS: dict[str, WatermarkingMethod] = {
+    DavideWatermark.name: DavideWatermark(),
+    KhaledTextSpacingWatermark.name: KhaledTextSpacingWatermark(),
+    FrancescoWatermark.name: FrancescoWatermark(),
+    Group13Watermark.name: Group13Watermark(),
 }
-"""Registry of available watermarking methods.
-
-Keys are human-readable method names (stable, lowercase, hyphenated)
-exposed by each implementation's ``.name`` attribute. Values are
-*instances* of the corresponding class.
-"""
+"""Map stable method names to instantiated implementations."""
 
 
 def register_method(method: WatermarkingMethod) -> None:
@@ -66,12 +38,9 @@ def register_method(method: WatermarkingMethod) -> None:
 
 
 def get_method(method: str | WatermarkingMethod) -> WatermarkingMethod:
-    """Resolve a method from a string name or pass-through an instance.
+    """Return an existing method instance or look up its name.
 
-    Raises
-    ------
-    KeyError
-        If ``method`` is a string not present in :data:`METHODS`.
+    Raise KeyError for an unregistered name.
     """
     if isinstance(method, WatermarkingMethod):
         return method
@@ -83,27 +52,32 @@ def get_method(method: str | WatermarkingMethod) -> WatermarkingMethod:
         ) from exc
 
 
-# --------------------
-# Public API helpers
-# --------------------
-
 def apply_watermark(
     method: str | WatermarkingMethod,
     pdf: PdfSource,
     secret: str,
     key: str,
     position: str | None = None,
+    intended_for: str | None = None,
 ) -> bytes:
     """Apply a watermark using the specified method and return new PDF bytes."""
     m = get_method(method)
+    if m.name in (FrancescoWatermark.name, Group13Watermark.name):
+        return m.add_watermark(
+            pdf=pdf,
+            secret=secret,
+            key=key,
+            position=position,
+            intended_for=intended_for,
+        )
     return m.add_watermark(pdf=pdf, secret=secret, key=key, position=position)
 
 def is_watermarking_applicable(
     method: str | WatermarkingMethod,
     pdf: PdfSource,
     position: str | None = None,
-) -> bytes:
-    """Apply a watermark using the specified method and return new PDF bytes."""
+) -> bool:
+    """Return whether the method can watermark the PDF at the given position."""
     m = get_method(method)
     return m.is_watermark_applicable(pdf=pdf, position=position)
 
@@ -112,11 +86,6 @@ def read_watermark(method: str | WatermarkingMethod, pdf: PdfSource, key: str) -
     """Recover a secret from ``pdf`` using the specified method."""
     m = get_method(method)
     return m.read_secret(pdf=pdf, key=key)
-
-
-# --------------------
-# PDF exploration
-# --------------------
 
 # Pre-compiled regex for the fallback parser (very permissive):
 _OBJ_RE: Final[re.Pattern[bytes]] = re.compile(
@@ -127,37 +96,19 @@ _TYPE_RE: Final[re.Pattern[bytes]] = re.compile(rb"/Type\s*/([A-Za-z]+)")
 
 
 def _sha1(b: bytes) -> str:
-    return hashlib.sha1(b).hexdigest()
+    return hashlib.sha1(b, usedforsecurity=False).hexdigest()
 
 
-def explore_pdf(pdf: PdfSource) -> Dict[str, Any]:
-    """Return a JSON-serializable *tree* describing the PDF's nodes.
+def explore_pdf(pdf: PdfSource) -> dict[str, Any]:
+    """Return a deterministic tree of document, page, and object metadata.
 
-    The structure is deterministic for a given set of input bytes. When
-    PyMuPDF (``fitz``) is available, the function uses the cross
-    reference (xref) table to enumerate objects and page nodes. When not
-    available, it falls back to scanning for ``obj`` / ``endobj`` blocks.
-
-    The returned dictionary has the following shape (fields may be
-    omitted when data is unavailable):
-
-    .. code-block:: json
-
-        {
-          "id": "pdf:<sha1>",
-          "type": "Document",
-          "size": 12345,
-          "children": [
-            {"id": "page:0000", "type": "Page", ...},
-            {"id": "obj:000001", "type": "XObject", ...}
-          ]
-        }
-
-    Each node includes a deterministic ``id`` suitable as a "name node".
+    Each node has a stable id and type. Document nodes contain size and children; page and
+    object nodes include available geometry, references, or content hashes. Use the regex
+    fallback only when native object inspection fails.
     """
     data = load_pdf_bytes(pdf)
 
-    root: Dict[str, Any] = {
+    root: dict[str, Any] = {
         "id": f"pdf:{_sha1(data)}",
         "type": "Document",
         "size": len(data),
@@ -168,25 +119,27 @@ def explore_pdf(pdf: PdfSource) -> Dict[str, Any]:
         import fitz  # type: ignore
 
         doc = fitz.open(stream=data, filetype="pdf")
-        # Pages as first-class nodes
+
         for page_index in range(doc.page_count):
             node = {
                 "id": f"page:{page_index:04d}",
                 "type": "Page",
                 "index": page_index,
-                "bbox": list(doc.load_page(page_index).bound()),  # [x0,y0,x1,y1]
+                "bbox": list(doc.load_page(page_index).bound()),  # [x0,y0,x1,y1].
             }
             root["children"].append(node)
 
-        # XRef objects
         xref_len = doc.xref_length()
         for xref in range(1, xref_len):
             try:
                 s = doc.xref_object(xref, compressed=False) or ""
-            except Exception:
+            except (RuntimeError, ValueError, AttributeError):
                 s = ""
-            s_bytes = s.encode("latin-1", "replace") if isinstance(s, str) else b""
-            # Type detection
+            # Preserve the native object's text, including escaped PDF names decoded to lone
+            # surrogates by the backend. Replacement encoding would give distinct objects the
+            # same content fingerprint.
+            s_bytes = s.encode("utf-8", "surrogatepass") if isinstance(s, str) else b""
+
             m = _TYPE_RE.search(s_bytes)
             pdf_type = m.group(1).decode("ascii", "replace") if m else "Object"
             node = {
@@ -200,12 +153,15 @@ def explore_pdf(pdf: PdfSource) -> Dict[str, Any]:
 
         doc.close()
         return root
-    except Exception:
-        # Fallback: regex-based object scanning (no third-party deps)
-        pass
+    except (ImportError, RuntimeError, ValueError, AttributeError) as exc:
+        # Fallback: regex-based object scanning (no third-party deps).
+        logger.warning(
+            "PyMuPDF exploration failed; using regex fallback (%s)",
+            type(exc).__name__,
+        )
 
-    # Regex fallback: enumerate uncompressed objects
-    children: List[Dict[str, Any]] = []
+    # Regex fallback: enumerate uncompressed objects.
+    children: list[dict[str, Any]] = []
     for m in _OBJ_RE.finditer(data):
         obj_num = int(m.group(1))
         gen_num = int(m.group(2))
@@ -213,7 +169,7 @@ def explore_pdf(pdf: PdfSource) -> Dict[str, Any]:
         end_match = _ENDOBJ_RE.search(data, start)
         end = end_match.start() if end_match else start
         slice_bytes = data[start:end]
-        # Guess type
+
         t = _TYPE_RE.search(slice_bytes)
         pdf_type = t.group(1).decode("ascii", "replace") if t else "Object"
         node = {
@@ -225,10 +181,10 @@ def explore_pdf(pdf: PdfSource) -> Dict[str, Any]:
         }
         children.append(node)
 
-    # Also derive simple page nodes by searching for '/Type /Page'
+    # Also derive simple page nodes by searching for '/Type /Page'.
     page_nodes = [c for c in children if c.get("type") == "Page"]
     for i, c in enumerate(page_nodes):
-        # Provide deterministic page IDs independent from object numbers
+        # Provide deterministic page IDs independent from object numbers.
         c_page = {
             "id": f"page:{i:04d}",
             "type": "Page",
@@ -239,14 +195,12 @@ def explore_pdf(pdf: PdfSource) -> Dict[str, Any]:
     root["children"] = children
     return root
 
-
 __all__ = [
     "METHODS",
-    "register_method",
-    "get_method",
     "apply_watermark",
-    "read_watermark",
     "explore_pdf",
-    "is_watermarking_applicable"
+    "get_method",
+    "is_watermarking_applicable",
+    "read_watermark",
+    "register_method"
 ]
-

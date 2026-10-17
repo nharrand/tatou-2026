@@ -1,9 +1,9 @@
     :root {
-      --bg: #0f172a;        /* slate-900 */
-      --panel: #111827;     /* gray-900 */
-      --muted: #94a3b8;     /* slate-400 */
-      --text: #e5e7eb;      /* gray-200 */
-      --brand: #4f46e5;     /* indigo-600 */
+      --bg: #0f172a;        /* slate-900. */
+      --panel: #111827;     /* gray-900. */
+      --muted: #94a3b8;     /* slate-400. */
+      --text: #e5e7eb;      /* gray-200. */
+      --brand: #4f46e5;     /* indigo-600. */
       --brand-600: #4338ca;
       --ring: 0 0 0 3px rgba(79,70,229,.35);
       --radius: 16px;
@@ -24,7 +24,7 @@
     a { color: inherit; text-decoration: none; }
     .container { width: min(1100px, 92%); margin: 0 auto; }
 
-    /* Header */
+    /* Header. */
     header { position: sticky; top: 0; backdrop-filter: saturate(150%) blur(6px); background: color-mix(in oklab, var(--bg) 86%, transparent); z-index: 10; }
     .nav { display: flex; align-items: center; justify-content: space-between; padding: 16px 0; }
     .brand { display: inline-flex; align-items: center; gap: 10px; font-weight: 700; letter-spacing: .2px; }
@@ -35,7 +35,7 @@
     .btn--primary { background: var(--brand); border-color: var(--brand); }
     .btn--primary:hover { background: var(--brand-600); box-shadow: var(--ring); }
 
-    /* Hero */
+    /* Hero. */
     .hero { display: grid; grid-template-columns: 1.2fr 1fr; gap: 28px; align-items: center; padding: 64px 0 40px; }
     .hero h1 { font-size: clamp(28px, 4vw, 48px); line-height: 1.08; margin: 0 0 12px; letter-spacing: -.3px; }
     .hero p { color: var(--muted); font-size: clamp(14px, 1.8vw, 18px); margin: 0 0 22px; }
@@ -52,16 +52,16 @@
     .feature h3 { margin: 8px 0 6px; font-size: 16px; }
     .feature p { margin: 0; color: var(--muted); font-size: 14px; }
 
-    /* Footer */
+    /* Footer. */
     footer { padding: 36px 0; color: var(--muted); font-size: 14px; }
 
-    /* Responsive */
+    /* Responsive. */
     @media (max-width: 860px) {
       .hero { grid-template-columns: 1fr; padding-top: 40px; }
       .features { grid-template-columns: 1fr; }
     }
     
-    /* Forms */
+    /* Forms. */
 .form-vertical { display:block; width:100%; }
 .form-vertical label { display:block; font-size:14px; font-weight:500; margin:10px 0 4px; }
 .form-vertical input, form select, form textarea { width:100%; padding:10px; border-radius:6px; border:1px solid #cbd5e1; font-size:14px; }
@@ -69,5 +69,5 @@
 .form-vertical button { margin-top:12px; }
 
 
-/* Utility for grouping inputs */
+/* Utility for grouping inputs. */
 .form-grid { display:flex; flex-direction:column; gap:12px; }

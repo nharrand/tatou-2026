@@ -1,0 +1,17 @@
+    version: 2
+    updates:
+      # Update Python dependencies.
+      - package-ecosystem: "pip"
+        directory: "/server"
+        schedule:
+          interval: "weekly"
+  
+      # Update the base Docker image.
+      - package-ecosystem: "docker"
+        directory: "/server"
+        schedule:
+          interval: "weekly"
+        ignore:
+          # PGPy (used by rmap) imports stdlib imghdr, removed in Python 3.13.
+          - dependency-name: "python"
+            versions: [">=3.13"]

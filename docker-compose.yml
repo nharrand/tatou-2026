@@ -1,4 +1,6 @@
-version: "3.9"
+include:
+  - docker-compose.monitoring.yml
+
 
 services:
   server:
@@ -9,18 +11,33 @@ services:
       - "5000:5000"
     volumes:
       - user-files:/app/storage
+      - ${RMAP_KEYS_HOST_DIR:-./rmap-keys}:/app/rmap-keys:ro
     environment:
       - PYTHONUNBUFFERED=1
-      # DB connection details for future use by the API
+      # Configure the application database connection.
       - DB_HOST=db
       - DB_PORT=3306
       - DB_NAME=tatou
       - DB_USER=${MARIADB_USER}
       - DB_PASSWORD=${MARIADB_PASSWORD}
-      - FLAG_2=${FLAG_2}
+      - FLAG_1=${FLAG_1}
+      - SECRET_KEY=${SECRET_KEY:?Set SECRET_KEY in .env}
+      - MAX_UPLOAD_SIZE_BYTES=${MAX_UPLOAD_SIZE_BYTES:-67108864}
+      - RMAP_SERVER_PUBLIC_KEY_PATH=${RMAP_SERVER_PUBLIC_KEY_PATH:-}
+      - RMAP_SERVER_PRIVATE_KEY_PATH=${RMAP_SERVER_PRIVATE_KEY_PATH:-}
+      - RMAP_CLIENT_KEYS_DIR=${RMAP_CLIENT_KEYS_DIR:-}
+      - RMAP_SERVER_KEY_PASSPHRASE=${RMAP_SERVER_KEY_PASSPHRASE:-}
+      - RMAP_SERVER_KEY_PASSPHRASE_FILE=${RMAP_SERVER_KEY_PASSPHRASE_FILE:-}
+      - RMAP_DOCUMENT_ID=${RMAP_DOCUMENT_ID:-}
+      - RMAP_WATERMARK_METHOD=${RMAP_WATERMARK_METHOD:-}
+      - RMAP_WATERMARK_KEY=${RMAP_WATERMARK_KEY:-}
+      - RMAP_WATERMARK_POSITION=${RMAP_WATERMARK_POSITION:-}
     depends_on:
       db:
         condition: service_healthy
+    networks:
+      - default
+      - backend
     restart: unless-stopped
 
   db:
@@ -35,28 +52,32 @@ services:
       - db-data:/var/lib/mysql
       - ./db/tatou.sql:/docker-entrypoint-initdb.d/10-tatou.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "mariadb-admin ping -h 127.0.0.1 -u root --password=$MARIADB_ROOT_PASSWORD --silent"]
+      test: ["CMD-SHELL", "mariadb-admin ping -h 127.0.0.1 -u root --password=$$MARIADB_ROOT_PASSWORD --silent"]
       interval: 10s
       timeout: 5s
       retries: 5
-    ports:
-      - "3306:3306"
+    networks:
+      - backend
     restart: unless-stopped
 
-  phpmyadmin:
-    image: phpmyadmin:5.2
-    environment:
-      - PMA_HOST=db
-      - PMA_PORT=3306
-      - UPLOAD_LIMIT=64M     # <-- use a unit and quote if using YAML key:value form
-      - MEMORY_LIMIT=256M
-    ports:
-      - "8080:80"
-    depends_on:
-      db:
-        condition: service_healthy
-    restart: unless-stopped
+  #phpmyadmin:
+  #  image: phpmyadmin:5.2
+  #  environment:
+  #    - PMA_HOST=db
+  #    - PMA_PORT=3306
+  #    - UPLOAD_LIMIT=64M     # <-- use a unit and quote if using YAML key:value form
+  #    - MEMORY_LIMIT=256M
+  #  ports:
+  #    - "8080:80"
+  #  depends_on:
+  #    db:
+  #      condition: service_healthy
+  #  restart: unless-stopped
 
 volumes:
   db-data:
   user-files:
+
+networks:
+  backend:
+    internal: true

@@ -1,0 +1,7 @@
+# Shell scripts run inside Linux containers.
+*.sh text eol=lf
+
+# Preserve fuzzing inputs exactly.
+/artifacts/khaled/fuzzing/corpus/* -text
+/artifacts/khaled/fuzzing/findings/* -text
+/server/test/api/fixtures/*.pdf -text

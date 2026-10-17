@@ -74,6 +74,7 @@
     function apiFetch(path, options = {}) {
       const headers = new Headers(options.headers || {});
       headers.set('Authorization', 'Bearer ' + token);
+      headers.set('X-CSRF-Protection', '1');
       return fetch(path, { ...options, headers });
     }
     function apiFetchJSON(path, method, obj){
@@ -85,6 +86,12 @@
     }
 
     let methodsCache = null;
+    const methodLabels = {
+      'davide-watermark': 'Davide — image watermark',
+      'francesco-watermark': 'Francesco — QR and visible text',
+      'khaled-text-spacing-watermark': 'Khaled — text spacing',
+      'group13-watermark': 'Group 13 — combined (all three)'
+    };
     async function loadMethods(){
       if (methodsCache) return methodsCache;
       const r = await apiFetch('/api/get-watermarking-methods');
@@ -150,8 +157,9 @@
 
     document.getElementById('uploadForm').addEventListener('submit', async (e) => {
       e.preventDefault();
+      const uploadForm = e.currentTarget;
       statusEl.textContent = 'Uploading…';
-      const fd = new FormData(e.currentTarget);
+      const fd = new FormData(uploadForm);
       try {
         const resp = await apiFetch('/api/upload-document', { method: 'POST', body: fd });
         if (!resp.ok) {
@@ -159,7 +167,7 @@
           throw new Error(err.message || resp.statusText);
         }
         statusEl.textContent = 'Uploaded successfully';
-        e.currentTarget.reset();
+        uploadForm.reset();
         await loadDocuments();
       } catch (err) {
         statusEl.textContent = 'Upload failed: ' + err.message;
@@ -217,14 +225,14 @@
 
     async function openCreateWatermarkForm(documentId){
       const methods = await loadMethods();
-      const options = methods.map(m => `<option value="${escapeHtml(m.name)}">${escapeHtml(m.name)} — ${escapeHtml(m.description||'')}</option>`).join('');
+      const options = methods.map(m => `<option value="${escapeHtml(m.name)}">${escapeHtml(methodLabels[m.name] || m.name)}</option>`).join('');
       openModal('Create watermark for #' + documentId, `
         <form id="createWmForm" class="form-vertical">
-          <label>Method<select name="method" required><option value="" disabled selected>Select a method</option>${options}</select></label>
+          <label>Watermark method<select name="method" required><option value="" disabled selected>Select one of the four methods</option>${options}</select></label>
           <label>Position<input name="position" placeholder="Position"></label>
           <label>Key<input name="key" placeholder="Reader key" required></label>
           <label>Secret<input name="secret" placeholder="Secret embedded in WM" required></label>
-          <label>Intended for<input name="intended_for" placeholder="Recipient or purpose"></label>
+          <label>Intended for<input name="intended_for" placeholder="Recipient or purpose" required></label>
           <div class="row-actions">
             <button class="btn" type="button" id="cancelCreate">Cancel</button>
             <button class="btn btn--primary" type="submit">Create</button>
@@ -251,10 +259,10 @@
 
     async function openReadWatermarkForm(documentId){
       const methods = await loadMethods();
-      const options = methods.map(m => `<option value="${escapeHtml(m.name)}">${escapeHtml(m.name)} — ${escapeHtml(m.description||'')}</option>`).join('');
+      const options = methods.map(m => `<option value="${escapeHtml(m.name)}">${escapeHtml(methodLabels[m.name] || m.name)}</option>`).join('');
       openModal('Read watermark for #' + documentId, `
         <form id="readWmForm" class="form-vertical">
-          <label>Method<select name="method" required><option value="" disabled selected>Select a method</option>${options}</select></label>
+          <label>Watermark method<select name="method" required><option value="" disabled selected>Select one of the four methods</option>${options}</select></label>
           <label>Position<input name="position" placeholder="Position"></label>
           <label>Key<input name="key" placeholder="Reader key" required></label>
           <div class="row-actions">
@@ -302,4 +310,3 @@
   </script>
 </body>
 </html>
-

@@ -1,0 +1,123 @@
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+      - "feat/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: Ruff
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: server
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install ruff
+        run: |
+          python - <<'PYTHON'
+          import subprocess
+          import sys
+          import tomllib
+          from pathlib import Path
+
+          dev = tomllib.loads(Path("pyproject.toml").read_text())["project"]["optional-dependencies"]["dev"]
+          ruff = next(dependency for dependency in dev if dependency.startswith("ruff=="))
+          subprocess.check_call([sys.executable, "-m", "pip", "install", ruff])
+          PYTHON
+
+      - name: Lint
+        run: ruff check --output-format github .
+
+  test:
+    name: Run Pytest
+    runs-on: ubuntu-latest
+
+    services:
+      mariadb:
+        image: mariadb:11.4
+        env:
+          # Disposable CI-only credentials; never use deployment secrets here.
+          MARIADB_ROOT_PASSWORD: synthetic-ci-root
+          MARIADB_DATABASE: tatou_test_ci
+          MARIADB_USER: tatou_test
+          MARIADB_PASSWORD: synthetic-ci-user
+        ports:
+          - 127.0.0.1:3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+
+    env:
+      TATOU_TEST_MARIADB_URL: mysql+pymysql://tatou_test:synthetic-ci-user@127.0.0.1:3306/tatou_test_ci
+
+    defaults:
+      run:
+        working-directory: server
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: |
+            server/pyproject.toml
+            server/requirements.txt
+
+      - name: Check pinned requirements
+        run: |
+          python -m pip install pip==25.0.1 pip-tools==7.5.3
+          pip-compile --no-header --strip-extras --output-file=requirements.txt pyproject.toml
+          git diff --exit-code -- requirements.txt
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y tesseract-ocr
+          pip install -r requirements.txt -e .[dev]
+
+      - name: Run tests
+        run: |
+          export SECRET_KEY="$(python -c 'import secrets; print(secrets.token_hex(32))')"
+          pytest
+
+  docker-smoke:
+    name: Docker build and smoke test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Build server image
+        run: docker build --tag tatou-server:ci ./server
+
+      - name: Check application dependencies inside the image
+        run: |
+          timeout 30s docker run --rm --network none --entrypoint python \
+            --mount type=bind,src="$PWD/server/test/rmap/import_guard.py",dst=/tmp/import_guard.py,readonly \
+            tatou-server:ci -I -B /tmp/import_guard.py

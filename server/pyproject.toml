@@ -4,23 +4,67 @@ version = "0.0.1"
 description = "PDF Watermarking platform"
 requires-python = ">=3.11"
 dependencies = [
-	"PyMuPDF>=1.21.1",
-	"Flask==3.0.3",
-	"gunicorn==21.2.0",
-	"PyMySQL==1.1.2",
-	"SQLAlchemy==2.0.43",
-	"dill==0.4.0"
+	"PyMuPDF>=1.24.0",
+	"numpy>=1.26",
+	"Pillow>=10.0",
+	"cryptography>=42",
+	"reedsolo==1.7.0",
+	"zxing-cpp==3.1.1",
+	"Flask==3.1.3",
+	"gunicorn==26.2.0",
+	"PyMySQL==1.2.3",
+	"SQLAlchemy==2.1.4",
+	"rmap @ git+https://github.com/nharrand/RMAP.git@v2.0.0"
 ]
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=7.0.0"
+    "pytest>=7.0.0",
+    "ruff==0.16.10",
+    "coverage==7.16.2",
+    "pytest-cov==7.1.0",
+    "mutmut==3.8.0"
 ]
 
 [tool.pytest.ini_options]
 addopts = "-q"
 testpaths = ["test/"]
 python_files = ["test_*.py"]
+# Fail on new warnings; retain exact exceptions for unresolved dependency deprecations.
+# SWIG metadata: https://github.com/pymupdf/PyMuPDF/issues/4434
+# PGPy compatibility: https://github.com/SecurityInnovation/PGPy/issues/462
+filterwarnings = [
+    "error",
+    "ignore:builtin type (SwigPyPacked|SwigPyObject|swigvarlink) has no __module__ attribute:DeprecationWarning",
+    "ignore:'imghdr' is deprecated and slated for removal in Python 3[.]13:DeprecationWarning:pgpy[.]constants",
+    "ignore:TripleDES has been moved to .*:cryptography.utils.CryptographyDeprecationWarning:pgpy[.]constants",
+    "ignore:Camellia has been moved to .*:cryptography.utils.CryptographyDeprecationWarning:pgpy[.]constants",
+    "ignore:CFB has been moved to .*:cryptography.utils.CryptographyDeprecationWarning:pgpy[.]symenc",
+]
+
+[tool.ruff]
+line-length = 120
+src = ["src", "test"]
+
+[tool.ruff.lint]
+# pycodestyle, pyflakes, isort, bugbear, pyupgrade, bandit (security),
+# simplify, comprehensions, ruff-specific
+select = ["E", "F", "W", "I", "B", "UP", "S", "SIM", "C4", "RUF"]
+
+[tool.ruff.lint.isort]
+# the rmap library, not the test/rmap folder
+known-third-party = ["rmap"]
+
+[tool.ruff.lint.per-file-ignores]
+# Fuzzing scripts use assertions and a local dummy authentication key.
+"fuzzing/**" = ["S101", "S105"]
+# tests use assert, fixed dummy passwords, temp paths and local tools
+"test/**" = ["S101", "S105", "S106", "S107", "S108", "S603", "S607"]
 
 [project.scripts]
 pdfwm = "watermarking_cli:main"                 # now you can run `pdfwm methods`
+
+[tool.mutmut]
+source_paths = ["src/"]
+pytest_add_cli_args_test_selection = ["test/"]
+mutate_only_covered_lines = false

@@ -1,0 +1,75 @@
+groups:
+  - name: tatou_alerts
+    rules:
+      # Detect service errors and crashes.
+      - alert: ServiceDown
+        expr: up == 0
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "Service {{ $labels.job }} is DOWN"
+          description: "Target {{ $labels.instance }} for job '{{ $labels.job }}' is unreachable."
+
+      - alert: ContainerCrashOrRestart
+        expr: rate(container_start_time_seconds{name=~"tatou.*"}[5m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Container restarting: {{ $labels.name }}"
+          description: "Container {{ $labels.name }} has restarted recently. Check logs for errors or crashes."
+
+      - alert: HighServerErrorRate
+        expr: (rate(promtail_custom_http_5xx_errors_total[1m]) > 0.05) or (rate(promtail_custom_log_errors_total{compose_service="server"}[1m]) > 0.2)
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "High error rate detected on server"
+          description: "Server is encountering multiple HTTP 500 errors or application exceptions."
+
+      - alert: DatabaseErrors
+        expr: rate(promtail_custom_log_errors_total{compose_service="db"}[1m]) > 0.1
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "Database errors detected"
+          description: "MariaDB database container is generating error logs."
+      # Detect attack indicators.
+      - alert: BruteForceOrAuthAttack
+        expr: rate(promtail_custom_auth_attacks_total[1m]) > 0.2
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "Potential Brute-Force / Credential Stuffing Attack"
+          description: "Detected spike in authentication failures or 429 rate limit triggers on Tatou server."
+
+      - alert: PotentialDoS_HighCpu
+        expr: sum(rate(container_cpu_usage_seconds_total{name=~"tatou.*"}[1m])) by (name) > 0.80
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Potential DoS attack: High CPU usage on {{ $labels.name }}"
+          description: "Container {{ $labels.name }} CPU usage is above 80% for more than 1 minute."
+
+      - alert: HighMemoryExhaustion
+        expr: container_memory_working_set_bytes{name=~"tatou.*"} > 471859200
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Memory exhaustion spike on {{ $labels.name }}"
+          description: "Container {{ $labels.name }} is using over 450MB of memory."
+
+      - alert: PotentialDDoS_NetworkFlood
+        expr: sum by (name) (rate(container_network_receive_bytes_total{name=~"tatou.*"}[1m])) > 10485760
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "Potential DDoS: High network inbound traffic on {{ $labels.name }}"
+          description: "Network inbound traffic on {{ $labels.name }} exceeded 10 MB/s."
