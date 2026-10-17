@@ -1,5 +1,0 @@
-Here is a flag demonstrating, if stolen, that an attacker managed to access information inside the application's container. (This isn't great.)
-
-This file should be copied in the python server's container. This is currently implemented as an instruction in your Dockerfile, but if you decide to go with a different tool, don't forget to put the flag in your container.
-
-REPLACE_THIS_STRING_WITH_SERVER_FLAG

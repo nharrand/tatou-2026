@@ -1,0 +1,34 @@
+[project]
+name = "Tatou-Server"
+version = "0.0.1"
+description = "PDF Watermarking platform"
+requires-python = ">=3.11"
+dependencies = [
+	"PyMuPDF>=1.21.1",
+	"Flask==3.0.3",
+	"gunicorn==21.2.0",
+	"PyMySQL==1.1.2",
+	"SQLAlchemy==2.0.43",
+	"dill==0.4.0",
+	"rmap @ git+https://github.com/nharrand/RMAP.git@v1.0.2"
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+	"mutmut>=3.8,<4"
+]
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["test/"]
+python_files = ["test_*.py"]
+
+[project.scripts]
+pdfwm = "watermarking_cli:main"                 # now you can run `pdfwm methods`
+
+[tool.mutmut]
+source_paths = ["src"]
+only_mutate = ["src/whitespace_watermark.py"]
+pytest_add_cli_args_test_selection = ["test/test_whitespace_watermark.py"]
+pytest_add_cli_args = ["-o", "pythonpath=src"]

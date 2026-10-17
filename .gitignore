@@ -205,3 +205,12 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+.env
+flag
+server/flag
+server/keys/
+
+# Secrets / coursework flags
+/flag
+/server/flag
+.env

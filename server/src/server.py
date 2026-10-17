@@ -2,6 +2,8 @@ import os
 import io
 import hashlib
 import datetime as dt
+
+from rmap import RMAPServer
 from pathlib import Path
 from functools import wraps
 
@@ -47,12 +49,37 @@ def create_app():
             f"@{app.config['DB_HOST']}:{app.config['DB_PORT']}/{app.config['DB_NAME']}?charset=utf8mb4"
         )
 
+
+    app.config["RMAP_SERVER_PUB"] = Path(os.environ.get("RMAP_SERVER_PUB", "./keys/server_pub.asc")).resolve()
+    app.config["RMAP_SERVER_PRIV"] = Path(os.environ.get("RMAP_SERVER_PRIV", "./keys/server_priv.asc")).resolve()
+    app.config["RMAP_CLIENTS_DIR"] = Path(os.environ.get("RMAP_CLIENTS_DIR", "./keys/clients/pki")).resolve()
+    app.config["RMAP_LINK_PREFIX"] = os.environ.get("RMAP_LINK_PREFIX", "http://localhost:5000/api/get-version/")
+    app.config["RMAP_SERVER_KEY_PASSPHRASE"] = os.environ.get("RMAP_SERVER_KEY_PASSPHRASE", "")
+    app.config["RMAP_WATERMARK_KEY"] = os.environ.get("RMAP_WATERMARK_KEY", "change-me-server-secret")
+
+
     def get_engine():
         eng = app.config.get("_ENGINE")
         if eng is None:
             eng = create_engine(db_url(), pool_pre_ping=True, future=True)
             app.config["_ENGINE"] = eng
         return eng
+
+
+
+    def get_rmap_server():
+        rs = app.config.get("_RMAP_SERVER")
+        if rs is None:
+            rs = RMAPServer(
+                app.config["RMAP_SERVER_PUB"],
+                app.config["RMAP_SERVER_PRIV"],
+		passphrase=app.config["RMAP_SERVER_KEY_PASSPHRASE"] or None,
+                linkPrefix=app.config["RMAP_LINK_PREFIX"],
+                verbose=False,
+            )
+            rs.loadIdentities(app.config["RMAP_CLIENTS_DIR"])
+            app.config["_RMAP_SERVER"] = rs
+        return rs
 
     # --- Helpers ---
     def _serializer():
@@ -444,6 +471,8 @@ def create_app():
     # DELETE /api/delete-document  (and variants)
     @app.route("/api/delete-document", methods=["DELETE", "POST"])  # POST supported for convenience
     @app.route("/api/delete-document/<document_id>", methods=["DELETE"])
+    @require_auth
+
     def delete_document(document_id: int | None = None):
         # accept id from path, query (?id= / ?documentid=), or JSON body on POST
         if not document_id:
@@ -460,8 +489,12 @@ def create_app():
         # Fetch the document (enforce ownership)
         try:
             with get_engine().connect() as conn:
-                query = "SELECT * FROM Documents WHERE id = " + doc_id
-                row = conn.execute(text(query)).first()
+
+                row = conn.execute(
+                    text("SELECT * FROM Documents WHERE id = :id AND ownerid = :uid"),
+                    {"id": doc_id, "uid": int(g.user["id"])},
+		).first()
+
         except Exception as e:
             return jsonify({"error": f"database error: {str(e)}"}), 503
 
@@ -749,6 +782,7 @@ def create_app():
             doc_id = document_id
         except (TypeError, ValueError):
             return jsonify({"error": "document id required"}), 400
+
             
         payload = request.get_json(silent=True) or {}
         # allow a couple of aliases for convenience
@@ -764,7 +798,46 @@ def create_app():
         if not method or not isinstance(key, str):
             return jsonify({"error": "method, and key are required"}), 400
 
-        # lookup the document; FIXME enforce ownership
+        link = payload.get("link")
+
+        if not method or not isinstance(key, str):
+            return jsonify({"error": "method and key are required"}), 400
+
+        if link:
+            try:
+                with get_engine().connect() as conn:
+                    row = conn.execute(
+                        text("""
+                            SELECT v.path FROM Versions v
+                            JOIN Documents d ON d.id = v.documentid
+                            WHERE v.link = :link AND d.ownerid = :uid
+                            LIMIT 1
+                        """),
+                        {"link": link, "uid": int(g.user["id"])},
+                    ).first()
+            except Exception as e:
+                return jsonify({"error": f"database error: {str(e)}"}), 503
+
+            if not row:
+                return jsonify({"error": "version not found"}), 404
+
+            file_path = Path(row.path)
+            if not file_path.exists():
+                return jsonify({"error": "file missing on disk"}), 410
+
+            try:
+                secret = WMUtils.read_watermark(method=method, pdf=str(file_path), key=key)
+            except Exception as e:
+                return jsonify({"error": f"Error when attempting to read watermark: {e}"}), 400
+
+            return jsonify({"link": link, "secret": secret, "method": method, "position": position}), 200
+
+        try:
+            doc_id = int(doc_id)
+        except (TypeError, ValueError):
+            return jsonify({"error": "document_id (int) is required"}), 400
+
+        # lookup the document; enforce ownership
         try:
             with get_engine().connect() as conn:
                 row = conn.execute(
@@ -810,6 +883,116 @@ def create_app():
             "position": position
         }), 201
 
+
+    # POST /api/rmap-initiate  {"payload": "<base64>"}  → Response 1
+    @app.post("/api/rmap-initiate")
+    def rmap_initiate():
+        payload = request.get_json(silent=True) or {}
+        wire_msg1 = {"payload": payload.get("payload")}
+        if not wire_msg1["payload"]:
+            return jsonify({"error": "payload is required"}), 400
+
+        try:
+            identity, resp1 = get_rmap_server().receiveMsg1(wire_msg1)
+        except Exception as e:
+            return jsonify({"error": f"rmap-initiate failed: {e}"}), 400
+
+        return jsonify(resp1), 200
+
+    # POST /api/rmap-get-link  {"payload": "<base64>"}  → Response 2 (link)
+    @app.post("/api/rmap-get-link")
+    def rmap_get_link():
+        payload = request.get_json(silent=True) or {}
+        wire_msg2 = {"payload": payload.get("payload")}
+        if not wire_msg2["payload"]:
+            return jsonify({"error": "payload is required"}), 400
+
+        try:
+            identity, expected_link, resp2 = get_rmap_server().receiveMsg2(wire_msg2)
+        except Exception as e:
+            return jsonify({"error": f"rmap-get-link failed: {e}"}), 400
+
+
+        RMAP_SOURCE_DOCUMENT_ID = 3
+
+        try:
+            with get_engine().connect() as conn:
+                row = conn.execute(
+                    text("""
+                        SELECT id, name, path
+                        FROM Documents
+                        WHERE id = :id
+                        LIMIT 1
+                    """),
+                    {"id": RMAP_SOURCE_DOCUMENT_ID},
+                ).first()
+        except Exception as e:
+            return jsonify({"error": f"database error: {e}"}), 503
+
+        if not row:
+            return jsonify({"error": "rmap source document not configured"}), 500
+
+        storage_root = Path(app.config["STORAGE_DIR"]).resolve()
+        file_path = Path(row.path)
+        if not file_path.is_absolute():
+            file_path = storage_root / file_path
+        file_path = file_path.resolve()
+        if not file_path.exists():
+            return jsonify({"error": "rmap source file missing on disk"}), 500
+
+        # Watermark the document, embedding the requester's identity as the secret
+        try:
+            wm_bytes = WMUtils.apply_watermark(
+                pdf=str(file_path),
+                secret=identity,
+                key=app.config["RMAP_WATERMARK_KEY"],
+                method="invisible-text",
+                position=None,
+            )
+        except Exception as e:
+            return jsonify({"error": f"watermarking failed: {e}"}), 500
+
+        dest_dir = file_path.parent / "watermarks"
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        dest_path = dest_dir / f"rmap__{identity}__{expected_link}.pdf"
+        try:
+            with dest_path.open("wb") as f:
+                f.write(wm_bytes)
+        except Exception as e:
+            return jsonify({"error": f"failed to write watermarked file: {e}"}), 500
+
+        # Record the version BEFORE returning the link
+        try:
+            with get_engine().begin() as conn:
+                conn.execute(
+                    text("""
+                        INSERT INTO Versions (documentid, link, intended_for, secret, method, position, path)
+                        VALUES (:documentid, :link, :intended_for, :secret, :method, :position, :path)
+                    """),
+                    {
+                        "documentid": RMAP_SOURCE_DOCUMENT_ID,
+                        "link": expected_link,
+                        "intended_for": identity,
+                        "secret": identity,
+                        "method": "invisible-text",
+                        "position": "",
+                        "path": str(dest_path),
+                    },
+                )
+        except Exception as e:
+            try:
+                dest_path.unlink(missing_ok=True)
+            except Exception:
+                pass
+            return jsonify({"error": f"database error during version insert: {e}"}), 503
+
+
+
+
+        # TODO: create the watermarked PDF for `identity` here, and insert a
+        # Versions row with link=expected_link, BEFORE returning resp2.
+        return jsonify(resp2), 200
+
     return app
     
 
@@ -819,4 +1002,3 @@ app = create_app()
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
-

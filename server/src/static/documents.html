@@ -269,6 +269,18 @@
         const fd = new FormData(e.currentTarget);
         const payload = Object.fromEntries(fd.entries());
         try {
+          // Fetch the latest version link for this document to read from the watermarked file
+          const versionsR = await apiFetchJSON(`/api/list-versions/${documentId}`, 'GET');
+          if (versionsR.ok) {
+            const versionsData = await versionsR.json();
+            const versions = versionsData.versions || [];
+            // Filter by selected method and pick the latest
+            const matching = versions.filter(v => v.method === payload.method);
+            if (matching.length > 0) {
+              const latest = matching[matching.length - 1];
+              payload.link = latest.link;
+            }
+          }
           const r = await apiFetchJSON(`/api/read-watermark/${documentId}`, 'POST', payload);
           if (!r.ok) throw new Error('HTTP ' + r.status);
           const data = await r.json();

@@ -1,0 +1,341 @@
+[
+  {
+    "group": "03",
+    "host": "softsec-group-03.dsv.local.su.se",
+    "reachable": true,
+    "health": 200,
+    "methods": [
+      "toy-eof",
+      "bash-bridge-eof"
+    ],
+    "bash_bridge": true,
+    "rmap_initiate": {
+      "status": 200,
+      "allow": "HEAD, OPTIONS, GET"
+    },
+    "rmap_get_link": {
+      "status": 200,
+      "allow": "HEAD, OPTIONS, GET"
+    },
+    "error": null
+  },
+  {
+    "group": "04",
+    "host": "softsec-group-04.dsv.local.su.se",
+    "reachable": false,
+    "health": null,
+    "methods": [],
+    "bash_bridge": false,
+    "rmap_initiate": null,
+    "rmap_get_link": null,
+    "error": "HTTPConnectionPool(host='softsec-group-04.dsv.local.su.se', port=5000): Max retries exceeded with url: /healthz (Caused by ConnectTimeoutError(<HTTPConnection(host='softsec-group-04.dsv.local.su.se', port=5000) at 0x7ff491b57c50>, 'Connection to softsec-group-04.dsv.local.su.se timed out. (connect timeout=5)'))"
+  },
+  {
+    "group": "05",
+    "host": "softsec-group-05.dsv.local.su.se",
+    "reachable": true,
+    "health": 200,
+    "methods": [
+      "toy-eof",
+      "bash-bridge-eof",
+      "HMAC-Signed"
+    ],
+    "bash_bridge": true,
+    "rmap_initiate": {
+      "status": 200,
+      "allow": "HEAD, GET, OPTIONS"
+    },
+    "rmap_get_link": {
+      "status": 200,
+      "allow": "HEAD, GET, OPTIONS"
+    },
+    "error": null
+  },
+  {
+    "group": "06",
+    "host": "softsec-group-06.dsv.local.su.se",
+    "reachable": false,
+    "health": null,
+    "methods": [],
+    "bash_bridge": false,
+    "rmap_initiate": null,
+    "rmap_get_link": null,
+    "error": "HTTPConnectionPool(host='softsec-group-06.dsv.local.su.se', port=5000): Max retries exceeded with url: /healthz (Caused by ConnectTimeoutError(<HTTPConnection(host='softsec-group-06.dsv.local.su.se', port=5000) at 0x7ff491bd7100>, 'Connection to softsec-group-06.dsv.local.su.se timed out. (connect timeout=5)'))"
+  },
+  {
+    "group": "07",
+    "host": "softsec-group-07.dsv.local.su.se",
+    "reachable": true,
+    "health": 503,
+    "methods": [
+      "toy-eof",
+      "bash-bridge-eof"
+    ],
+    "bash_bridge": true,
+    "rmap_initiate": {
+      "status": 200,
+      "allow": "GET, OPTIONS, HEAD"
+    },
+    "rmap_get_link": {
+      "status": 200,
+      "allow": "GET, OPTIONS, HEAD"
+    },
+    "error": null
+  },
+  {
+    "group": "08",
+    "host": "softsec-group-08.dsv.local.su.se",
+    "reachable": false,
+    "health": null,
+    "methods": [],
+    "bash_bridge": false,
+    "rmap_initiate": null,
+    "rmap_get_link": null,
+    "error": "HTTPConnectionPool(host='softsec-group-08.dsv.local.su.se', port=5000): Max retries exceeded with url: /healthz (Caused by ConnectTimeoutError(<HTTPConnection(host='softsec-group-08.dsv.local.su.se', port=5000) at 0x7ff4919bcef0>, 'Connection to softsec-group-08.dsv.local.su.se timed out. (connect timeout=5)'))"
+  },
+  {
+    "group": "09",
+    "host": "softsec-group-09.dsv.local.su.se",
+    "reachable": true,
+    "health": 200,
+    "methods": [
+      "toy-eof"
+    ],
+    "bash_bridge": false,
+    "rmap_initiate": {
+      "status": 200,
+      "allow": "HEAD, GET, OPTIONS"
+    },
+    "rmap_get_link": {
+      "status": 200,
+      "allow": "HEAD, GET, OPTIONS"
+    },
+    "error": null
+  },
+  {
+    "group": "10",
+    "host": "softsec-group-10.dsv.local.su.se",
+    "reachable": false,
+    "health": null,
+    "methods": [],
+    "bash_bridge": false,
+    "rmap_initiate": null,
+    "rmap_get_link": null,
+    "error": "HTTPConnectionPool(host='softsec-group-10.dsv.local.su.se', port=5000): Max retries exceeded with url: /healthz (Caused by ConnectTimeoutError(<HTTPConnection(host='softsec-group-10.dsv.local.su.se', port=5000) at 0x7ff491955f20>, 'Connection to softsec-group-10.dsv.local.su.se timed out. (connect timeout=5)'))"
+  },
+  {
+    "group": "11",
+    "host": "softsec-group-11.dsv.local.su.se",
+    "reachable": true,
+    "health": 200,
+    "methods": [
+      "toy-eof",
+      "bash-bridge-eof"
+    ],
+    "bash_bridge": true,
+    "rmap_initiate": {
+      "status": 200,
+      "allow": "GET, OPTIONS, HEAD"
+    },
+    "rmap_get_link": {
+      "status": 200,
+      "allow": "GET, OPTIONS, HEAD"
+    },
+    "error": null
+  },
+  {
+    "group": "12",
+    "host": "softsec-group-12.dsv.local.su.se",
+    "reachable": false,
+    "health": null,
+    "methods": [],
+    "bash_bridge": false,
+    "rmap_initiate": null,
+    "rmap_get_link": null,
+    "error": "HTTPConnectionPool(host='softsec-group-12.dsv.local.su.se', port=5000): Max retries exceeded with url: /healthz (Caused by ConnectTimeoutError(<HTTPConnection(host='softsec-group-12.dsv.local.su.se', port=5000) at 0x7ff491956250>, 'Connection to softsec-group-12.dsv.local.su.se timed out. (connect timeout=5)'))"
+  },
+  {
+    "group": "13",
+    "host": "softsec-group-13.dsv.local.su.se",
+    "reachable": true,
+    "health": 200,
+    "methods": [
+      "toy-eof",
+      "bash-bridge-eof"
+    ],
+    "bash_bridge": true,
+    "rmap_initiate": {
+      "status": 200,
+      "allow": "OPTIONS, GET, HEAD"
+    },
+    "rmap_get_link": {
+      "status": 200,
+      "allow": "OPTIONS, GET, HEAD"
+    },
+    "error": null
+  },
+  {
+    "group": "14",
+    "host": "softsec-group-14.dsv.local.su.se",
+    "reachable": false,
+    "health": null,
+    "methods": [],
+    "bash_bridge": false,
+    "rmap_initiate": null,
+    "rmap_get_link": null,
+    "error": "HTTPConnectionPool(host='softsec-group-14.dsv.local.su.se', port=5000): Max retries exceeded with url: /healthz (Caused by ConnectTimeoutError(<HTTPConnection(host='softsec-group-14.dsv.local.su.se', port=5000) at 0x7ff491956580>, 'Connection to softsec-group-14.dsv.local.su.se timed out. (connect timeout=5)'))"
+  },
+  {
+    "group": "15",
+    "host": "softsec-group-15.dsv.local.su.se",
+    "reachable": true,
+    "health": 200,
+    "methods": [
+      "toy-eof",
+      "bash-bridge-eof"
+    ],
+    "bash_bridge": true,
+    "rmap_initiate": {
+      "status": 200,
+      "allow": "OPTIONS, GET, HEAD"
+    },
+    "rmap_get_link": {
+      "status": 200,
+      "allow": "OPTIONS, GET, HEAD"
+    },
+    "error": null
+  },
+  {
+    "group": "16",
+    "host": "softsec-group-16.dsv.local.su.se",
+    "reachable": false,
+    "health": null,
+    "methods": [],
+    "bash_bridge": false,
+    "rmap_initiate": null,
+    "rmap_get_link": null,
+    "error": "HTTPConnectionPool(host='softsec-group-16.dsv.local.su.se', port=5000): Max retries exceeded with url: /healthz (Caused by ConnectTimeoutError(<HTTPConnection(host='softsec-group-16.dsv.local.su.se', port=5000) at 0x7ff4919567a0>, 'Connection to softsec-group-16.dsv.local.su.se timed out. (connect timeout=5)'))"
+  },
+  {
+    "group": "18",
+    "host": "softsec-group-18.dsv.local.su.se",
+    "reachable": false,
+    "health": null,
+    "methods": [],
+    "bash_bridge": false,
+    "rmap_initiate": null,
+    "rmap_get_link": null,
+    "error": "HTTPConnectionPool(host='softsec-group-18.dsv.local.su.se', port=5000): Max retries exceeded with url: /healthz (Caused by ConnectTimeoutError(<HTTPConnection(host='softsec-group-18.dsv.local.su.se', port=5000) at 0x7ff4919569c0>, 'Connection to softsec-group-18.dsv.local.su.se timed out. (connect timeout=5)'))"
+  },
+  {
+    "group": "19",
+    "host": "softsec-group-19.dsv.local.su.se",
+    "reachable": true,
+    "health": 200,
+    "methods": [
+      "toy-eof",
+      "bash-bridge-eof"
+    ],
+    "bash_bridge": true,
+    "rmap_initiate": {
+      "status": 200,
+      "allow": "OPTIONS, GET, HEAD"
+    },
+    "rmap_get_link": {
+      "status": 200,
+      "allow": "OPTIONS, GET, HEAD"
+    },
+    "error": null
+  },
+  {
+    "group": "20",
+    "host": "softsec-group-20.dsv.local.su.se",
+    "reachable": false,
+    "health": null,
+    "methods": [],
+    "bash_bridge": false,
+    "rmap_initiate": null,
+    "rmap_get_link": null,
+    "error": "HTTPConnectionPool(host='softsec-group-20.dsv.local.su.se', port=5000): Max retries exceeded with url: /healthz (Caused by ConnectTimeoutError(<HTTPConnection(host='softsec-group-20.dsv.local.su.se', port=5000) at 0x7ff4919558c0>, 'Connection to softsec-group-20.dsv.local.su.se timed out. (connect timeout=5)'))"
+  },
+  {
+    "group": "21",
+    "host": "softsec-group-21.dsv.local.su.se",
+    "reachable": true,
+    "health": 200,
+    "methods": [
+      "toy-eof"
+    ],
+    "bash_bridge": false,
+    "rmap_initiate": {
+      "status": 200,
+      "allow": "OPTIONS, HEAD, GET"
+    },
+    "rmap_get_link": {
+      "status": 200,
+      "allow": "OPTIONS, HEAD, GET"
+    },
+    "error": null
+  },
+  {
+    "group": "22",
+    "host": "softsec-group-22.dsv.local.su.se",
+    "reachable": false,
+    "health": null,
+    "methods": [],
+    "bash_bridge": false,
+    "rmap_initiate": null,
+    "rmap_get_link": null,
+    "error": "HTTPConnectionPool(host='softsec-group-22.dsv.local.su.se', port=5000): Max retries exceeded with url: /healthz (Caused by ConnectTimeoutError(<HTTPConnection(host='softsec-group-22.dsv.local.su.se', port=5000) at 0x7ff491956140>, 'Connection to softsec-group-22.dsv.local.su.se timed out. (connect timeout=5)'))"
+  },
+  {
+    "group": "23",
+    "host": "softsec-group-23.dsv.local.su.se",
+    "reachable": false,
+    "health": null,
+    "methods": [],
+    "bash_bridge": false,
+    "rmap_initiate": null,
+    "rmap_get_link": null,
+    "error": "HTTPConnectionPool(host='softsec-group-23.dsv.local.su.se', port=5000): Max retries exceeded with url: /healthz (Caused by NewConnectionError(\"HTTPConnection(host='softsec-group-23.dsv.local.su.se', port=5000): Failed to establish a new connection: [Errno 111] Connection refused\"))"
+  },
+  {
+    "group": "24",
+    "host": "softsec-group-24.dsv.local.su.se",
+    "reachable": false,
+    "health": null,
+    "methods": [],
+    "bash_bridge": false,
+    "rmap_initiate": null,
+    "rmap_get_link": null,
+    "error": "HTTPConnectionPool(host='softsec-group-24.dsv.local.su.se', port=5000): Max retries exceeded with url: /healthz (Caused by ConnectTimeoutError(<HTTPConnection(host='softsec-group-24.dsv.local.su.se', port=5000) at 0x7ff491956470>, 'Connection to softsec-group-24.dsv.local.su.se timed out. (connect timeout=5)'))"
+  },
+  {
+    "group": "25",
+    "host": "softsec-group-25.dsv.local.su.se",
+    "reachable": true,
+    "health": 200,
+    "methods": [],
+    "bash_bridge": false,
+    "rmap_initiate": {
+      "status": 404,
+      "allow": null
+    },
+    "rmap_get_link": {
+      "status": 404,
+      "allow": null
+    },
+    "error": null
+  },
+  {
+    "group": "26",
+    "host": "softsec-group-26.dsv.local.su.se",
+    "reachable": false,
+    "health": null,
+    "methods": [],
+    "bash_bridge": false,
+    "rmap_initiate": null,
+    "rmap_get_link": null,
+    "error": "HTTPConnectionPool(host='softsec-group-26.dsv.local.su.se', port=5000): Max retries exceeded with url: /healthz (Caused by ConnectTimeoutError(<HTTPConnection(host='softsec-group-26.dsv.local.su.se', port=5000) at 0x7ff4919556a0>, 'Connection to softsec-group-26.dsv.local.su.se timed out. (connect timeout=5)'))"
+  }
+]
