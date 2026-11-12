@@ -1085,6 +1085,126 @@ def create_app():
             "position": position
         }), 201
 
+    # POST /api/identify-document/<int:document_id>  (multipart/form-data)
+    #
+    # Given a PDF found "in the wild", tells the owner of `document_id` which
+    # of their own watermarked versions it matches, without forcing them to
+    # re-upload the file as if it were new content to watermark.
+    #
+    # Security posture (see API.md#identify-document for the full list):
+    #   - requires authentication, and is scoped to the caller's own document
+    #     (same not-found-vs-not-owned ambiguity as read-watermark/get-document);
+    #   - validates the method name against the registry *before* touching the
+    #     uploaded bytes or the key, answering 405 for an unknown method;
+    #   - validates the upload is really a PDF by content, not by filename;
+    #   - never writes the uploaded bytes to disk - everything happens in
+    #     memory, so this route cannot be used to plant files or fill the disk;
+    #   - never echoes the key, the computed secret of a failed attempt, or any
+    #     filesystem path back in an error message;
+    #   - the matches it returns are restricted to the same document and the
+    #     same method, and only ever expose {versionid, intended_for}.
+    @app.post("/api/identify-document/<int:document_id>")
+    @require_auth
+    def identify_document(document_id: int):
+        # --- parameters (multipart/form-data, per the fixed API contract) ---
+        method = request.form.get("method")
+        key = request.form.get("key")
+        position = request.form.get("position") or None
+
+        if not method or not isinstance(method, str):
+            return jsonify({"error": "method is required"}), 400
+        if not key or not isinstance(key, str):
+            return jsonify({"error": "key is required"}), 400
+
+        # Unknown method is checked first, and before the file is even read:
+        # a caller probing for valid method names must not learn anything
+        # about a document's existence, and the uploaded bytes are never
+        # processed by code we have no watermarking implementation for.
+        if method not in WMUtils.METHODS:
+            return jsonify({"error": "unknown watermarking method"}), 405
+
+        if "file" not in request.files:
+            return jsonify({"error": "file is required (multipart/form-data)"}), 400
+        file = request.files["file"]
+        if not file or file.filename == "":
+            return jsonify({"error": "empty filename"}), 400
+
+        # Check the actual content, not the filename/extension - a renamed
+        # non-PDF must not reach the watermark reader.
+        head = file.stream.read(5)
+        file.stream.seek(0)
+        if head != b"%PDF-":
+            return jsonify({"error": "only PDF files are accepted"}), 400
+
+        # The upload is processed entirely in memory: it is never written
+        # under STORAGE_DIR, so this route cannot be used to plant a file on
+        # the server or to exhaust disk space with "leaked" documents that
+        # are, in fact, attacker-controlled content.
+        pdf_bytes = file.stream.read()
+
+        # Ownership check. Same answer (404) whether document_id does not
+        # exist or belongs to another user - no document-enumeration oracle,
+        # exactly as for read-watermark and get-document.
+        try:
+            with get_engine().connect() as conn:
+                row = conn.execute(
+                    text("""
+                        SELECT id
+                        FROM Documents
+                        WHERE id = :id AND ownerid = :uid
+                        LIMIT 1
+                    """),
+                    {"id": document_id, "uid": int(g.user["id"])},
+                ).first()
+        except Exception:
+            app.logger.exception("identify_document: document lookup failed")
+            return jsonify({"error": "database error"}), 503
+
+        if not row:
+            return jsonify({"error": "document not found"}), 404
+
+        # Recover the secret from the uploaded file. Every failure here
+        # (wrong key, no watermark of this method present, corrupt payload)
+        # is reported generically: the underlying exceptions never include
+        # the key or a filesystem path (see watermarking_method.py), but we
+        # still keep the message generic on purpose so repeated guesses give
+        # an attacker no finer-grained signal than "it failed".
+        try:
+            secret = WMUtils.read_watermark(method=method, pdf=pdf_bytes, key=key)
+        except Exception:
+            return jsonify({"error": "unable to read a watermark from this file with the given method and key"}), 400
+
+        # Only versions of *this* document, created with *this* method, and
+        # whose stored secret matches the one just read, are reported. The
+        # response exposes nothing beyond {versionid, intended_for} - never
+        # another version's secret, key, or storage path.
+        try:
+            with get_engine().connect() as conn:
+                matches = conn.execute(
+                    text("""
+                        SELECT id, intended_for
+                        FROM Versions
+                        WHERE documentid = :documentid AND method = :method AND secret = :secret
+                    """),
+                    {"documentid": document_id, "method": method, "secret": secret},
+                ).fetchall()
+        except Exception:
+            app.logger.exception("identify_document: version lookup failed")
+            return jsonify({"error": "database error"}), 503
+
+        _audit("document.identified", level=logging.INFO, uid=int(g.user["id"]),
+               login=g.user["login"], documentid=document_id, method=method,
+               match_count=len(matches))
+
+        return jsonify({
+            "documentid": document_id,
+            "method": method,
+            "secret": secret,
+            "matches": [
+                {"versionid": int(m.id), "intended_for": m.intended_for} for m in matches
+            ],
+        }), 200
+
     # ------------------------------------------------------------------
     # RMAP endpoints
     #
@@ -1171,6 +1291,21 @@ def create_app():
             return jsonify({"error": "server error"}), 500
 
         return jsonify(resp2), 200
+
+    # ------------------------------------------------------------------
+    # Related problem found while building identify-document:
+    # MAX_CONTENT_LENGTH was already enforced (20 MiB default) for every
+    # route, but Werkzeug's default handling of the resulting
+    # RequestEntityTooLarge answers with an HTML error page, not the
+    # {"error": <string>} JSON object every other failure in this API
+    # returns. identify-document is the first route whose whole point is to
+    # accept an arbitrary, possibly oversized, uploaded file, so this becomes
+    # directly relevant here: without this handler, a too-large upload would
+    # leak an HTML body where every client of this API expects JSON.
+    # ------------------------------------------------------------------
+    @app.errorhandler(413)
+    def _request_too_large(_exc):
+        return jsonify({"error": "request body too large"}), 413
 
     return app
     

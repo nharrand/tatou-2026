@@ -17,6 +17,7 @@
 - [get-version](#get-version) — **GET** `/api/get-version/<link>`
 - [get-watermarking_methods](#get-watermarking-methods) — **GET** `/api/get-watermarking-methods`
 - [healthz](#healthz) — **GET** `/healthz`
+- [identify-document](#identify-document) — **POST** `/api/identify-document/<int:document_id>`
 - [list-all-versions](#list-all-versions) — **GET** `/api/list-all-versions`
 - [list-documents](#list-documents) — **GET** `/api/list-documents`
 - [list-versions](#list-versions)
@@ -403,6 +404,53 @@ This endpoint reads information contain in a pdf document's watermark with the p
  * Only the owner of a document should be able to create watermarked versions of their documents
  * The document owner MUST be able to list all versions of their documents and their intended recipients
  * The payload is a gpg encrypted JSON presented as ASCII armored base64, without any GPG headers.
+
+   ## identify-document
+
+**Description**
+This endpoint takes a PDF found "in the wild" (for example, a copy that leaked), reads its
+watermark with the given method and key, and tells the owner of `document_id` which of their
+own watermarked versions, if any, it matches. It exists so the owner never has to re-upload a
+found document as if it were new content to be watermarked.
+
+**Path**
+`POST /api/identify-document/<int:document_id>`
+
+**Parameters** (multipart/form-data)
+```json
+{
+    "file": <binary PDF>,
+    "method": <string>,
+    "key": <string>,
+    "position": <string, optional>
+}
+```
+
+**Return**
+```json
+{
+    "documentid": <int>,
+    "method": <string>,
+    "secret": <string>,
+    "matches": [
+        { "versionid": <int>, "intended_for": <string> }
+    ]
+}
+```
+
+**Errors**
+Every failure returns `{"error": <string>}` with a 4xx/5xx status. `method` naming an
+unregistered watermarking method MUST return 405.
+
+**Specification**
+ * The endpoint MUST require authentication (a valid bearer token), exactly as read-watermark and create-watermark do.
+ * The endpoint MUST only match against versions of a `document_id` owned by the authenticated caller; a non-existent document and a document owned by someone else MUST produce the identical 404 response, so the error never reveals whether a given document id exists.
+ * The endpoint MUST return HTTP 405 with `{"error": <string>}` when `method` does not name a method registered in `watermarking_utils.METHODS`, and MUST do so before the uploaded file is read or the key is used.
+ * The uploaded file MUST be validated as a well-formed PDF by its content (the `%PDF-` header), not by its filename or declared content type, before it is handed to any watermark-reading code.
+ * The uploaded file MUST be processed in memory only and MUST NOT be written to persistent storage, so the route cannot be used to plant files on the server or to exhaust disk space with attacker-supplied "leaked" documents.
+ * Error responses (unknown method, wrong key, no watermark of this method present, corrupt upload) MUST NOT include the submitted key, the secret recovered from a failed attempt, or any filesystem path, so repeated probing gives the caller no signal beyond "it failed".
+ * The `matches` array in a successful response MUST only ever contain versions of the requested `document_id` created with the requested `method`, and MUST expose only `versionid` and `intended_for` - never another version's `secret`, `key`, or storage `path`.
+ * The size of the uploaded file SHOULD be bounded (the server already enforces `MAX_CONTENT_LENGTH` for every route) so a "leaked" file cannot be used for a memory/disk-exhaustion denial of service, and exceeding that bound SHOULD still produce a JSON error, not an HTML one.
 
  ## rmap-initiate
  
